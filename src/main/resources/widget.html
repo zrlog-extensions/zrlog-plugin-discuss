@@ -1,0 +1,55 @@
+<div id="discuss-comments"></div>
+<script type="text/javascript">
+    (function () {
+        var enabled = ${enabledJson};
+        var serverURLs = ${serverURLsJson};
+        var scriptUrl = ${scriptUrlJson};
+        var configuredPath = ${pathJson};
+        var container = document.getElementById("discuss-comments");
+        if (!container || !enabled || !hasServerURLs(serverURLs)) {
+            if (container) {
+                container.style.display = "none";
+            }
+            return;
+        }
+
+        var path = configuredPath || window.location.pathname;
+        loadScript(scriptUrl, function () {
+            if (window.discuss && typeof window.discuss.init === "function") {
+                window.discuss.init({
+                    el: "#discuss-comments",
+                    serverURLs: serverURLs,
+                    path: path
+                });
+            }
+        });
+
+        function hasServerURLs(value) {
+            if (Array.isArray(value)) {
+                return value.length > 0;
+            }
+            return typeof value === "string" && value.trim().length > 0;
+        }
+
+        function loadScript(src, callback) {
+            var existing = document.querySelector('script[data-zrlog-discuss="true"]');
+            if (existing) {
+                if (window.discuss) {
+                    callback();
+                } else {
+                    existing.addEventListener("load", callback, {once: true});
+                }
+                return;
+            }
+            var script = document.createElement("script");
+            script.type = "text/javascript";
+            script.charset = "utf-8";
+            script.async = true;
+            script.src = src;
+            script.setAttribute("data-zrlog-discuss", "true");
+            script.onload = callback;
+            (document.head || document.documentElement).appendChild(script);
+        }
+    })();
+</script>
+<noscript>Please enable JavaScript to view the comments</noscript>
