@@ -32,18 +32,9 @@ public class DiscussController {
     }
 
     public void update() {
-        Map<String, Object> params = new HashMap<>(requestInfo.simpleParam());
-        if (!Objects.equals(params.get("status"), "on")) {
-            params.put("status", "off");
-        }
-        if (isBlank(params.get("scriptUrl"))) {
-            params.put("scriptUrl", DEFAULT_SCRIPT_URL);
-        }
-        session.sendMsg(new MsgPacket(params, ContentType.JSON, MsgPacketStatus.SEND_REQUEST, IdUtil.getInt(),
+        session.sendMsg(new MsgPacket(requestConfig(), ContentType.JSON, MsgPacketStatus.SEND_REQUEST, IdUtil.getInt(),
                 ActionType.SET_WEBSITE.name()), msgPacket -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("success", true);
-            session.sendMsg(new MsgPacket(map, ContentType.JSON, MsgPacketStatus.RESPONSE_SUCCESS, requestPacket.getMsgId(), requestPacket.getMethodStr()));
+            response(DiscussApiResponse.success());
         });
     }
 
@@ -63,47 +54,35 @@ public class DiscussController {
     }
 
     public void widget() {
-        Map<String, Object> config = loadConfig();
-        boolean enabled = Objects.equals(config.get("status"), "on") && !isBlank(config.get("serverURLs"));
+        DiscussConfig config = loadConfig();
         Map<String, Object> data = new HashMap<>();
-        data.put("enabledJson", gson.toJson(enabled));
-        data.put("serverURLsJson", gson.toJson(toServerURLsConfig(config.get("serverURLs"))));
-        data.put("scriptUrlJson", gson.toJson(asString(config.get("scriptUrl"))));
-        data.put("pathJson", gson.toJson(asString(config.get("path"))));
+        data.put("enabledJson", gson.toJson(config.isEnabled()));
+        data.put("serverURLsJson", gson.toJson(toServerURLsConfig(config.getServerURLs())));
+        data.put("scriptUrlJson", gson.toJson(asString(config.getScriptUrl())));
+        data.put("pathJson", gson.toJson(asString(config.getPath())));
         session.responseHtml("/widget", data, requestPacket.getMethodStr(), requestPacket.getMsgId());
     }
 
-    private Map<String, Object> pageData() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("dark", isDarkMode());
-        data.put("colorPrimary", getAdminColorPrimary());
-        data.put("plugin", session.getPlugin());
-        data.put("config", loadConfig());
-        return successMap(data);
+    private DiscussApiResponse<DiscussPageData> pageData() {
+        DiscussPageData data = new DiscussPageData();
+        data.setDark(isDarkMode());
+        data.setColorPrimary(getAdminColorPrimary());
+        data.setPlugin(session.getPlugin());
+        data.setConfig(loadConfig());
+        return DiscussApiResponse.success(data);
     }
 
-    private Map<String, Object> loadConfig() {
-        Map<String, Object> keyMap = new HashMap<>();
-        keyMap.put("key", CONFIG_KEYS);
-        Map response = session.getResponseSync(ContentType.JSON, keyMap, ActionType.GET_WEBSITE, Map.class);
-        Map<String, Object> config = response == null ? new HashMap<>() : new HashMap<>(response);
-        if (!Objects.equals(config.get("status"), "on")) {
-            config.put("status", "off");
+    private DiscussConfig loadConfig() {
+        DiscussConfig config = session.getResponseSync(ContentType.JSON, WebsiteKeyRequest.of(CONFIG_KEYS), ActionType.GET_WEBSITE,
+                DiscussConfig.class);
+        if (config == null) {
+            config = new DiscussConfig();
         }
-        if (isBlank(config.get("scriptUrl"))) {
-            config.put("scriptUrl", DEFAULT_SCRIPT_URL);
-        }
-        if (isBlank(config.get("serverURLs"))) {
-            config.put("serverURLs", "");
-        }
-        if (isBlank(config.get("path"))) {
-            config.put("path", "");
-        }
-        config.put("version", session.getPlugin().getVersion());
+        config.normalize(DEFAULT_SCRIPT_URL, session.getPlugin().getVersion());
         return config;
     }
 
-    private Object toServerURLsConfig(Object value) {
+    private Object toServerURLsConfig(String value) {
         String raw = asString(value);
         if (raw.trim().isEmpty()) {
             return "";
@@ -122,23 +101,30 @@ public class DiscussController {
         return urls;
     }
 
-    private boolean isBlank(Object value) {
-        return value == null || String.valueOf(value).trim().isEmpty();
-    }
-
     private String asString(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
-    private Map<String, Object> successMap(Object data) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("success", true);
-        map.put("data", data);
-        return map;
+    private DiscussConfig requestConfig() {
+        DiscussConfig config = new DiscussConfig();
+        String status = paramValue("status");
+        config.setStatus(Objects.equals(status, "on") ? "on" : "off");
+        config.setServerURLs(asString(paramValue("serverURLs")));
+        String scriptUrl = asString(paramValue("scriptUrl"));
+        config.setScriptUrl(scriptUrl.isEmpty() ? DEFAULT_SCRIPT_URL : scriptUrl);
+        config.setPath(asString(paramValue("path")));
+        return config;
     }
 
-    private void response(Map<String, Object> map) {
-        session.sendMsg(ContentType.JSON, map, requestPacket.getMethodStr(), requestPacket.getMsgId(), MsgPacketStatus.RESPONSE_SUCCESS);
+    private String paramValue(String key) {
+        if (requestInfo.getParam() == null || requestInfo.getParam().get(key) == null || requestInfo.getParam().get(key).length == 0) {
+            return null;
+        }
+        return requestInfo.getParam().get(key)[0];
+    }
+
+    private void response(Object data) {
+        session.sendMsg(ContentType.JSON, data, requestPacket.getMethodStr(), requestPacket.getMsgId(), MsgPacketStatus.RESPONSE_SUCCESS);
     }
 
     private boolean isDarkMode() {
