@@ -1,6 +1,7 @@
 package com.zrlog.plugin.discuss.controller;
 
 import com.google.gson.Gson;
+import com.zrlog.plugin.data.codec.PluginAppearance;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.IdUtil;
 import com.zrlog.plugin.data.codec.ContentType;
@@ -66,6 +67,7 @@ public class DiscussController {
     private DiscussApiResponse<DiscussPageData> pageData() {
         DiscussPageData data = new DiscussPageData();
         data.setDark(isDarkMode());
+        data.setAppearance(PluginAppearance.from(requestInfo));
         data.setColorPrimary(getAdminColorPrimary());
         data.setPlugin(session.getPlugin());
         data.setConfig(loadConfig());
